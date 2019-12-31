@@ -1,0 +1,60 @@
+# Specify version format
+version: "0.18.{build}"
+
+# Operating system (build VM template)
+os: Visual Studio 2019
+ 
+# build platform, i.e. Win32 (instead of x86), x64, Any CPU. This setting is optional.
+platform:
+  - x64
+
+# specify custom environment variables
+environment:
+  PROJECT_NAME: "MySQL8" # should be same as root CMakeList.txt
+  MSVC_DEFAULT_OPTIONS: ON
+  BOOST_ROOT: C:\Libraries\boost_1_70_0
+  BOOST_LIBRARYDIR_WIN32: C:\Libraries\boost_1_70_0\lib32-msvc-14.2
+  BOOST_LIBRARYDIR_WIN64: C:\Libraries\boost_1_70_0\lib64-msvc-14.2
+  SNAPSHOT_TAG: "Last_$(APPVEYOR_PROJECT_NAME)_PreBuild"
+  
+# build configuration, i.e. Debug, Release, etc.
+configuration:
+  - Release
+
+# scripts that are called at very beginning, before repo cloning
+init:
+
+# clone directory
+clone_folder: C:\projects\mysql8
+
+# Do not build on tags (GitHub only)
+skip_tags: true
+
+# scripts to run before build
+before_build:
+  - cmd: if "%platform%"=="Win32" set BOOST_LIBRARYDIR="%BOOST_LIBRARYDIR_WIN32%"
+  - cmd: if "%platform%"=="x64" set BOOST_LIBRARYDIR="%BOOST_LIBRARYDIR_WIN64%"
+  - cmd: set PROJECT_ROOT="%APPVEYOR_BUILD_FOLDER%\.."
+  - cmd: set BUILD_DIR="%PROJECT_ROOT%\build"
+  - cmd: mkdir "%BUILD_DIR%"
+  - cmd: cd "%PROJECT_ROOT%"
+  - cmd: cmake -H"%BUILD_DIR%" -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX=/"%APPVEYOR_BUILD_FOLDER%"/installed -DDOWNLOAD_BOOST=1 %APPVEYOR_BUILD_FOLDER%
+
+# build script
+build_script:
+   - ps: |
+         $buildFolder = "$env:BUILD_DIR"
+         $sourceFolder = "$env:APPVEYOR_BUILD_FOLDER\"
+         $slnFile = "$env:PROJECT_NAME" + ".sln"
+         Write-Host "Building $env:PROJECT_NAME project ..." -f Yellow
+         msbuild "$buildFolder\$slnFile" /m /verbosity:quiet /logger:"C:\Program Files\AppVeyor\BuildAgent\Appveyor.MSBuildLogger.dll"
+
+# unit test
+test: off
+
+artifacts:
+  - path: bin\$(platform)_$(configuration)
+    name: $(APPVEYOR_PROJECT_NAME)_$(platform)_$(configuration)
+
+# deploy settings
+deploy:
